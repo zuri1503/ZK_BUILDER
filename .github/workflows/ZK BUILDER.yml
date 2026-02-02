@@ -1,0 +1,122 @@
+name: ZK BUILDER
+on:
+  workflow_dispatch:
+    inputs:
+      URL:
+        description: "ROM URL"
+        required: true
+      EXT4:
+        description: "FORCE EXT4"
+        type: boolean
+        default: 'false'
+      DECRYPT:
+        description: "DECRYPT DATA"
+        type: boolean
+        default: 'false'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6.0.2
+
+      - name: Maximize build disk space
+        uses: AdityaGarg8/remove-unwanted-software@v5
+        with:
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+          remove-docker-images: 'true'
+          remove-large-packages: 'true'
+          remove-cached-tools: 'true'
+
+      - name: Setup build environment
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          sudo timedatectl set-timezone UTC
+          sudo apt-get update > /dev/null 2>&1
+          sudo apt-get install -y python3 p7zip-full openjdk-17-jdk-headless openssh-client aria2 > /dev/null 2>&1
+          DATE=$(TZ=Asia/Ho_Chi_Minh date +"%y%m%d")
+          ROM_URL="${{ github.event.inputs.URL }}"
+          ROM_NAME="$(basename "${ROM_URL%%\?*}")"
+          if [[ "$ROM_NAME" == *"-OS"* ]]; then
+            if [[ "$ROM_NAME" =~ ^([a-z0-9]+)-ota_full-(OS[0-9.]+)\.([A-Z0-9]+)-user-([0-9.]+)-.*\.zip$ ]]; then
+              DEVICE_RAW="${BASH_REMATCH[1]}"
+              DEVICE="${DEVICE_RAW^^}"
+              OS_VER="${BASH_REMATCH[2]}"
+              REGION="${BASH_REMATCH[3]}"
+              ANDROID="${BASH_REMATCH[4]}"
+              ROM_VER="${OS_VER%%.*}"
+            else
+              export ZK_NAME="ZKOS_V1.0_${DATE}"
+            fi
+            export ZK_NAME="ZKOS_V1.0_${DEVICE}_${OS_VER}.${REGION}_${ANDROID}_${DATE}"
+          elif [[ "$ROM_NAME" == *"_V14"* ]]; then
+            if [[ "$ROM_NAME" =~ ^miui_([^_]+)_(V[0-9.]+)\.([A-Z0-9]+)_[^_]+_([0-9.]+)\.zip$ ]]; then
+              DEVICE="${BASH_REMATCH[1]}"
+              MIUI_VER="${BASH_REMATCH[2]}"
+              REGION="${BASH_REMATCH[3]}"
+              ANDROID="${BASH_REMATCH[4]}"
+              ROM_VER="V14"
+            else
+              export ZK_NAME="ZKUI_V1.0_${DATE}"
+            fi
+            export ZK_NAME="ZKUI_V1.0_${DEVICE}_${MIUI_VER}.${REGION}_${ANDROID}_${DATE}"
+          else
+            echo "Unable to set ZK ROM name"
+            exit 1
+          fi
+          echo "ZK_NAME=$ZK_NAME" >> $GITHUB_ENV
+          echo "$ZK_NAME"
+
+      - name: Download ROM files
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          mkdir -p "$GITHUB_WORKSPACE/ROM"
+          cd "$GITHUB_WORKSPACE/ROM"
+          timeout 9000 aria2c -x16 -j$(nproc) -U "Mozilla/5.0" -o "${ZK_NAME}.zip" "${{ github.event.inputs.URL }}" || exit 1
+
+      - name: Clone ZK AUTO BUILD sources
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          export ZK_HOME="/home/runner/work/ZK_AUTO_BUILD/ZK_AUTO_BUILD"
+          echo "ZK_HOME=$ZK_HOME" >> $GITHUB_ENV
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PRIVATE_REPO_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git clone -b main --depth=1 git@github.com:zuri1503/ZK_AUTO_BUILD.git "$ZK_HOME"
+          mkdir -p "$ZK_HOME/ROM"
+          mv -f "$GITHUB_WORKSPACE/ROM/${ZK_NAME}.zip" "$ZK_HOME/ROM/${ZK_NAME}.zip"
+          sudo chmod -R +x "$ZK_HOME"
+
+      - name: Build ProjectZK ROM
+        run: |
+          cd "$ZK_HOME"
+          sudo bash "$ZK_HOME/build.sh" "$GITHUB_ENV" "$ZK_HOME" "$ZK_NAME" \
+          "${{ github.event.inputs.EXT4 }}" "${{ github.event.inputs.DECRYPT }}"
+
+      - name: Upload ROM to Clouds
+        run: |
+          cd "$ZK_HOME"
+          export PIXELDRAIN_API_KEY="${{ secrets.PIXELDRAIN_API_KEY }}"
+          "$ZK_HOME/tools/pd" upload "$ROM_OUTPUT" > /dev/null 2>&1 || exit 1
+          upload_sourceforge() {
+            local ROM_OUTPUT="$1"
+            local URL="$2"
+            echo "${{ secrets.SF_SSH_KEY }}" > ~/.ssh/sf_key
+            chmod 600 ~/.ssh/sf_key
+            rsync -a --partial -q -e "ssh -i ~/.ssh/sf_key -o StrictHostKeyChecking=no" "$ROM_OUTPUT" \
+            "zuri1503@frs.sourceforge.net:/home/frs/project/projectzk/ProjectZK/$URL/" || exit 1
+          }
+          if [ "$ROM_VER" = "V14" ]; then
+            upload_sourceforge "$ROM_OUTPUT" "ZK/ZKUI14.0"
+          elif [ "$ROM_VER" = "OS2" ]; then
+            upload_sourceforge "$ROM_OUTPUT" "ZK/ZKOS2.2"
+          elif [ "$ROM_VER" = "OS3" ] || [ "$ROM_VER" = "OS3_A15" ]; then
+            upload_sourceforge "$ROM_OUTPUT" "ZK/ZKOS3.0"
+          fi
+          echo "Uploaded $ZK_NAME"
+          sudo rm -rf "$ZK_HOME"
