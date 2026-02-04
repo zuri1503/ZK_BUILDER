@@ -95,21 +95,22 @@ jobs:
       - name: Download ROM files
         run: |
           cd "$GITHUB_WORKSPACE"
-          mkdir -p "$GITHUB_WORKSPACE/ROM"
-          cd "$GITHUB_WORKSPACE/ROM"
-          timeout 9000 aria2c -s16 -x16 -j$(nproc) -c -U "Mozilla/5.0" -o "${ZK_NAME}.zip" "${{ github.event.inputs.URL }}" || exit 1
-          #aria2c --user-agent=curl/8.16.0 https://sourceforge.net/projects/projectzk/files/super_size.json
+          mkdir -p "$GITHUB_WORKSPACE/ROM" && cd "$GITHUB_WORKSPACE/ROM"
           super_json="super_size.json"
+          aria2c -L -o $super_json \
+          #https://github.com/${{ github.repository }}/releases/latest/download/super_size.json > /dev/null 2>&1
           echo '{
             "MARBLE": {
               "super_size": 9663676416
             }
           }' > "$super_json"
           if [ -f "$super_json" ] && jq -e --arg m "$DEVICE" '.[$m]' "$super_json" >/dev/null; then
+            echo "Use super size from super_size.json"
             super_size=$(jq -r --arg m "$DEVICE" '.[$m].super_size' "$super_json")
           else
             if [ -n "${{ github.event.inputs.URL2 }}" ]; then
-              timeout 9000 aria2c -s16 -x16 -j$(nproc) -c -U "Mozilla/5.0" -o "FASTBOOT.tgz" "${{ github.event.inputs.URL2 }}" || exit 1
+              timeout 9000 aria2c -s16 -x16 -j$(nproc) -c -U "Mozilla/5.0" \
+              -o "FASTBOOT.tgz" "${{ github.event.inputs.URL2 }}" || exit 1
               mkdir -p "FASTBOOT" && tar -xzf "FASTBOOT.tgz" -C "FASTBOOT" > /dev/null 2>&1 && rm -rf "FASTBOOT.tgz"
               simg2img FASTBOOT/*/images/super.img "FASTBOOT/super.img"
               super_size=$(stat -c %s "FASTBOOT/super.img") && rm -rf FASTBOOT
@@ -117,10 +118,11 @@ jobs:
             if ! jq -e --arg m "$DEVICE" '.[$m]' "$super_json" >/dev/null; then
               jq --arg m "$DEVICE" --argjson s "$super_size" '. + {($m): {super_size: $s}}' \
               "${super_json:-/dev/null}" 2>/dev/null > tmp.json && mv tmp.json "$super_json"
-              rsync -a --partial -q -e "ssh -i ~/.ssh/sf_key -o StrictHostKeyChecking=no" "$super_json" \
-              "zuri1503@frs.sourceforge.net:/home/frs/project/projectzk" || exit 1
+              gh release upload latest super_size.json --clobber
             fi
           fi
+          timeout 9000 aria2c -s16 -x16 -j$(nproc) -c -U "Mozilla/5.0" \
+          -o "${ZK_NAME}.zip" "${{ github.event.inputs.URL }}" || exit 1
           echo "Super partition size is: $super_size"
           echo "SUPER_SIZE=$super_size" >> $GITHUB_ENV
 
