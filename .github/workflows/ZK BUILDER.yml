@@ -104,7 +104,7 @@ jobs:
             "MARBLE": {
               "super_size": 9663676416
             }
-          }' "$super_json"
+          }' > "$super_json"
           if [ -f "$super_json" ] && jq -e --arg m "$DEVICE" '.[$m]' "$super_json" >/dev/null; then
             super_size=$(jq -r --arg m "$DEVICE" '.[$m].super_size' "$super_json")
           else
