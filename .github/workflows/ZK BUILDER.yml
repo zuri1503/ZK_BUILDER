@@ -7,9 +7,6 @@ on:
         required: true
       URL2:
         description: "FASTBOOT ROM URL"
-      SUPER:
-        description: "SUPER.IMG SIZE"
-        default: '9126805504'
       EXT4:
         description: "FORCE EXT4"
         type: boolean
@@ -86,7 +83,14 @@ jobs:
             exit 1
           fi
           echo "ZK_NAME=$ZK_NAME" >> $GITHUB_ENV
+          echo "DEVICE=$DEVICE" >> $GITHUB_ENV
           echo "$ZK_NAME"
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SF_SSH_KEY }}" > ~/.ssh/sf_key
+          chmod 600 ~/.ssh/sf_key
+          echo "${{ secrets.PRIVATE_REPO_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: Download ROM files
         run: |
@@ -94,13 +98,28 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/ROM"
           cd "$GITHUB_WORKSPACE/ROM"
           timeout 9000 aria2c -s16 -x16 -j$(nproc) -c -U "Mozilla/5.0" -o "${ZK_NAME}.zip" "${{ github.event.inputs.URL }}" || exit 1
-          if [ -n "${{ github.event.inputs.URL2 }}" ]; then
-            timeout 9000 aria2c -s16 -x16 -j$(nproc) -c -U "Mozilla/5.0" -o "FASTBOOT.tgz" "${{ github.event.inputs.URL2 }}" || exit 1
-            mkdir -p "FASTBOOT" && tar -xzf "FASTBOOT.tgz" -C "FASTBOOT" > /dev/null 2>&1 && rm -rf "FASTBOOT.tgz"
-            simg2img FASTBOOT/*/images/super.img "FASTBOOT/super.img"
-            export super_size=$(stat -c %s "FASTBOOT/super.img") && rm -rf FASTBOOT
+          #aria2c --user-agent=curl/8.16.0 https://sourceforge.net/projects/projectzk/files/super_size.json
+          super_json="super_size.json"
+          echo '{
+            "MARBLE": {
+              "super_size": 9663676416
+            }
+          }' "$super_json"
+          if [ -f "$super_json" ] && jq -e --arg m "$DEVICE" '.[$m]' "$super_json" >/dev/null; then
+            super_size=$(jq -r --arg m "$DEVICE" '.[$m].super_size' "$super_json")
           else
-            export super_size="${{ github.event.inputs.SUPER }}"
+            if [ -n "${{ github.event.inputs.URL2 }}" ]; then
+              timeout 9000 aria2c -s16 -x16 -j$(nproc) -c -U "Mozilla/5.0" -o "FASTBOOT.tgz" "${{ github.event.inputs.URL2 }}" || exit 1
+              mkdir -p "FASTBOOT" && tar -xzf "FASTBOOT.tgz" -C "FASTBOOT" > /dev/null 2>&1 && rm -rf "FASTBOOT.tgz"
+              simg2img FASTBOOT/*/images/super.img "FASTBOOT/super.img"
+              super_size=$(stat -c %s "FASTBOOT/super.img") && rm -rf FASTBOOT
+            fi
+            if ! jq -e --arg m "$DEVICE" '.[$m]' "$super_json" >/dev/null; then
+              jq --arg m "$DEVICE" --argjson s "$super_size" '. + {($m): {super_size: $s}}' \
+              "${super_json:-/dev/null}" 2>/dev/null > tmp.json && mv tmp.json "$super_json"
+              rsync -a --partial -q -e "ssh -i ~/.ssh/sf_key -o StrictHostKeyChecking=no" "$super_json" \
+              "zuri1503@frs.sourceforge.net:/home/frs/project/projectzk" || exit 1
+            fi
           fi
           echo "Super partition size is: $super_size"
           echo "SUPER_SIZE=$super_size" >> $GITHUB_ENV
@@ -110,10 +129,6 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           export ZK_HOME="/home/runner/work/ZK_AUTO_BUILD/ZK_AUTO_BUILD"
           echo "ZK_HOME=$ZK_HOME" >> $GITHUB_ENV
-          mkdir -p ~/.ssh
-          echo "${{ secrets.PRIVATE_REPO_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
           git clone -b main --depth=1 git@github.com:zuri1503/ZK_AUTO_BUILD.git "$ZK_HOME"
           mkdir -p "$ZK_HOME/ROM"
           mv -f "$GITHUB_WORKSPACE/ROM/${ZK_NAME}.zip" "$ZK_HOME/ROM/${ZK_NAME}.zip"
@@ -133,8 +148,6 @@ jobs:
           upload_sourceforge() {
             local ROM_OUTPUT="$1"
             local URL="$2"
-            echo "${{ secrets.SF_SSH_KEY }}" > ~/.ssh/sf_key
-            chmod 600 ~/.ssh/sf_key
             rsync -a --partial -q -e "ssh -i ~/.ssh/sf_key -o StrictHostKeyChecking=no" "$ROM_OUTPUT" \
             "zuri1503@frs.sourceforge.net:/home/frs/project/projectzk/ProjectZK/$URL/" || exit 1
           }
