@@ -9,6 +9,7 @@ on:
         description: "FASTBOOT ROM URL"
       SUPER:
         description: "SUPER.IMG SIZE"
+        default: '9126805504'
       EXT4:
         description: "FORCE EXT4"
         type: boolean
