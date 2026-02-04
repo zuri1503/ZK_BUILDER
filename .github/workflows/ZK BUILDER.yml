@@ -3,8 +3,12 @@ on:
   workflow_dispatch:
     inputs:
       URL:
-        description: "ROM URL"
+        description: "OTA ROM URL"
         required: true
+      URL2:
+        description: "FASTBOOT ROM URL"
+      SUPER:
+        description: "SUPER.IMG SIZE"
       EXT4:
         description: "FORCE EXT4"
         type: boolean
@@ -21,7 +25,19 @@ jobs:
       - name: Checkout main
         uses: actions/checkout@v6.0.2
 
+      - name: Check free disk space
+        id: diskcheck
+        run: |
+          FREE_GB=$(df -BG / | awk 'NR==2 {gsub("G","",$4); print $4}')
+          echo "Free disk space: ${FREE_GB}GB"
+          if [ "$FREE_GB" -lt 50 ]; then
+            echo "need_cleanup=true" >> $GITHUB_OUTPUT
+          else
+            echo "need_cleanup=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Maximize build disk space
+        if: steps.diskcheck.outputs.need_cleanup == 'true'
         uses: AdityaGarg8/remove-unwanted-software@v5
         with:
           remove-dotnet: 'true'
@@ -37,7 +53,7 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           sudo timedatectl set-timezone UTC
           sudo apt-get update > /dev/null 2>&1
-          sudo apt-get install -y python3 p7zip-full openjdk-17-jdk-headless openssh-client aria2 > /dev/null 2>&1
+          sudo apt-get install -y python3 p7zip-full openjdk-17-jdk-headless openssh-client aria2 android-sdk-libsparse-utils > /dev/null 2>&1
           DATE=$(TZ=Asia/Ho_Chi_Minh date +"%y%m%d")
           ROM_URL="${{ github.event.inputs.URL }}"
           ROM_NAME="$(basename "${ROM_URL%%\?*}")"
@@ -76,7 +92,17 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           mkdir -p "$GITHUB_WORKSPACE/ROM"
           cd "$GITHUB_WORKSPACE/ROM"
-          timeout 9000 aria2c -x16 -j$(nproc) -U "Mozilla/5.0" -o "${ZK_NAME}.zip" "${{ github.event.inputs.URL }}" || exit 1
+          timeout 9000 aria2c -s16 -x16 -j$(nproc) -c -U "Mozilla/5.0" -o "${ZK_NAME}.zip" "${{ github.event.inputs.URL }}" || exit 1
+          if [ -n "${{ github.event.inputs.URL2 }}" ] && [ -z "${{ github.event.inputs.SUPER }}" ]; then
+            timeout 9000 aria2c -s16 -x16 -j$(nproc) -c -U "Mozilla/5.0" -o "FASTBOOT.tgz" "${{ github.event.inputs.URL2 }}" || exit 1
+            7z x "FASTBOOT.tgz" -o"FASTBOOT" && rm -rf "FASTBOOT.tgz" > /dev/null 2>&1
+            simg2img FASTBOOT/*/images/super.img "FASTBOOT/super.img"
+            export super_size=$(stat -c %s "FASTBOOT/super.img") && rm -rf FASTBOOT
+          else
+            export super_size="${{ github.event.inputs.SUPER }}"
+          fi
+          echo "Super partition size is: $super_size"
+          echo "SUPER_SIZE=$super_size" >> $GITHUB_ENV
 
       - name: Clone ZK AUTO BUILD sources
         run: |
@@ -95,7 +121,7 @@ jobs:
       - name: Build ProjectZK ROM
         run: |
           cd "$ZK_HOME"
-          sudo bash "$ZK_HOME/build.sh" "$GITHUB_ENV" "$ZK_HOME" "$ZK_NAME" \
+          sudo bash "$ZK_HOME/build.sh" "$GITHUB_ENV" "$ZK_HOME" "$ZK_NAME" "$SUPER_SIZE" \
           "${{ github.event.inputs.EXT4 }}" "${{ github.event.inputs.DECRYPT }}"
 
       - name: Upload ROM to Clouds
