@@ -95,10 +95,11 @@ jobs:
           timeout 9000 aria2c -s16 -x16 -j$(nproc) -c -U "Mozilla/5.0" -o "${ZK_NAME}.zip" "${{ github.event.inputs.URL }}" || exit 1
           if [ -n "${{ github.event.inputs.URL2 }}" ] && [ -z "${{ github.event.inputs.SUPER }}" ]; then
             timeout 9000 aria2c -s16 -x16 -j$(nproc) -c -U "Mozilla/5.0" -o "FASTBOOT.tgz" "${{ github.event.inputs.URL2 }}" || exit 1
-            7z x "FASTBOOT.tgz" -o"FASTBOOT" && rm -rf "FASTBOOT.tgz" > /dev/null 2>&1
-            for i in FASTBOOT/*/images/super.img; do
-              simg2img "$i" "FASTBOOT/super.img"
-            done
+            7z x "FASTBOOT.tgz" -o"FASTBOOT" > /dev/null 2>&1 && rm -rf "FASTBOOT.tgz"
+            ls
+            ls FASTBOOT
+            ls FASTBOOT/*
+            simg2img "FASTBOOT/super.img"
             export super_size=$(stat -c %s "FASTBOOT/super.img") && rm -rf FASTBOOT
           else
             export super_size="${{ github.event.inputs.SUPER }}"
