@@ -97,8 +97,8 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           mkdir -p "$GITHUB_WORKSPACE/ROM" && cd "$GITHUB_WORKSPACE/ROM"
           super_json="super_size.json"
-          aria2c -L -o $super_json \
-          #https://github.com/${{ github.repository }}/releases/latest/download/super_size.json > /dev/null 2>&1
+          #aria2c -o $super_json \
+          https://github.com/${{ github.repository }}/releases/latest/download/super_size.json > /dev/null 2>&1
           echo '{
             "MARBLE": {
               "super_size": 9663676416
