@@ -113,16 +113,18 @@ jobs:
           best_time=999
           for i in "${mirrors[@]}"; do
             test="https://${i}.dl.sourceforge.net/project/${project}/${path}?viasf=1"
-            t=$(curl -o /dev/null -s -w "%{time_total}" \
-            --connect-timeout 5 --max-time 10 -I "$test")
-            [[ $? -ne 0 || -z "$t" ]] && continue
-            awk "BEGIN{exit !($t < 10)}" || continue
-            awk "BEGIN{exit !($t < $best_time)}" && {
+            t=$(curl -r 0-0 -o /dev/null -s -w "%{time_total}" \
+            --connect-timeout 5 --max-time 10 "$test") || continue
+            [[ -z "$t" ]] && continue
+            if (( $(echo "$t >= 10" | bc -l) )); then
+              continue
+            fi
+            if (( $(echo "$t < $best_time" | bc -l) )); then
               best="$i"
               best_time="$t"
-            }
+            fi
           done
-          [[ -z "$best" ]] && { echo "No valid mirror"; exit 1; }
+          [[ -z "$best" ]] && best="cfhcable"
           FINAL_URL="https://${best}.dl.sourceforge.net/project/${project}/${path}?viasf=1"
           echo "LINK: $FINAL_URL"
           cd "$GITHUB_WORKSPACE/ROM" && timeout 9000 aria2c $FINAL_URL -o ${ZK_NAME}.zip || exit 1
