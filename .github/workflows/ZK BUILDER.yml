@@ -125,7 +125,7 @@ jobs:
           [[ -z "$best" ]] && { echo "No valid mirror"; exit 1; }
           FINAL_URL="https://${best}.dl.sourceforge.net/project/${project}/${path}?viasf=1"
           echo "LINK: $FINAL_URL"
-          cd "$GITHUB_WORKSPACE/ROM" && timeout 9000 aria2c $FINAL_URL -o ${ZK_NAME}.zip" || exit 1
+          cd "$GITHUB_WORKSPACE/ROM" && timeout 9000 aria2c $FINAL_URL -o ${ZK_NAME}.zip || exit 1
 
       - name: Clone ZK AUTO BUILD sources
         run: |
