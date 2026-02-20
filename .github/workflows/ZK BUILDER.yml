@@ -10,9 +10,6 @@ on:
       URL:
         description: "XIAOMI.EU ROM URL"
         required: true
-      SERVER:
-        description: "SOURCEFORGE SERVER"
-        default: '?use_mirror=cfhcalbe'
       URL2:
         description: "OTA URL FOR VBMETA"
       PDU:
@@ -63,7 +60,7 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           sudo timedatectl set-timezone UTC
           sudo apt-get update > /dev/null 2>&1
-          sudo apt-get install -y python3 python-is-python3 p7zip-full openjdk-17-jdk-headless openssh-client pipx aria2 rclone > /dev/null 2>&1
+          sudo apt-get install -y python3 python-is-python3 p7zip-full openjdk-17-jdk-headless openssh-client pipx aria2 > /dev/null 2>&1
           DATE=$(TZ=UTC date +"%y%m%d")
           ROM_URL="${{ github.event.inputs.URL }}"
           ROM_NAME="$(basename "${ROM_URL%/download}")"
@@ -106,8 +103,29 @@ jobs:
             [ ! -f "$GITHUB_WORKSPACE/ROM/AVB_PATCH/vendor_boot.img" ] && \
             rm -rf "$GITHUB_WORKSPACE/ROM/AVB_PATCH"
           fi
-          timeout 9000 wget -c --progress=dot:giga -O "$GITHUB_WORKSPACE/ROM/${ZK_NAME}.zip" \
-          "${{ github.event.inputs.URL }}""${{ github.event.inputs.SF_SER }}" || exit 1
+          SF_LINK="${{ github.event.inputs.URL }}"
+          tmp="${SF_LINK#https://sourceforge.net/projects/}"
+          project="${tmp%%/*}"
+          path="${tmp#*/files/}"
+          path="${path%/download}"
+          mirrors=(jaist twds nchc phoenixnap cfhcable versaweb pilotfiber netix)
+          best=""
+          best_time=999
+          for i in "${mirrors[@]}"; do
+            test="https://${i}.dl.sourceforge.net/project/${project}/${path}?viasf=1"
+            t=$(curl -o /dev/null -s -w "%{time_total}" \
+            --connect-timeout 5 --max-time 10 -I "$test")
+            [[ $? -ne 0 || -z "$t" ]] && continue
+            awk "BEGIN{exit !($t < 10)}" || continue
+            awk "BEGIN{exit !($t < $best_time)}" && {
+              best="$i"
+              best_time="$t"
+            }
+          done
+          [[ -z "$best" ]] && { echo "No valid mirror"; exit 1; }
+          FINAL_URL="https://${best}.dl.sourceforge.net/project/${project}/${path}?viasf=1"
+          echo "LINK: $FINAL_URL"
+          cd "$GITHUB_WORKSPACE/ROM" && timeout 9000 aria2c $FINAL_URL -o ${ZK_NAME}.zip" || exit 1
 
       - name: Clone ZK AUTO BUILD sources
         run: |
@@ -134,7 +152,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd "$GITHUB_WORKSPACE"
-          if [ "$ROM_VER" != "V14" ]; then
+          if [ -n "$SUPER_SIZE" ]; then
             super_json="super_size.json"
             aria2c -o $super_json https://github.com/zuri1503/ZK_BUILDER/releases/latest/download/super_size.json > /dev/null 2>&1
             if ! jq -e --arg m "$DEVICE" '.[$m]' "$super_json" >/dev/null; then
