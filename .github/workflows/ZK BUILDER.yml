@@ -204,8 +204,7 @@ jobs:
               || { echo "::error::GDrive upload failed (folder: $folder_id)"; exit 1; }
           }
           pd_upload() {
-            local file="$1"
-            curl -u ":${{ secrets.PIXELDRAIN_API }}" -X PUT -T "$file" "https://pixeldrain.com/api/file/${ZK_NAME}.zip"
+            curl -u ":${{ secrets.PIXELDRAIN_API }}" -X PUT -T "$ROM_OUTPUT" "https://pixeldrain.com/api/file/${ZK_NAME}.zip" > /dev/null 2>&1
           }
           case "$ROM_VER" in
             V14)
@@ -226,7 +225,7 @@ jobs:
             OS3|OS3_A15)
               if [ "$IS_PRIVATE_DEVICE" = "true" ]; then
                 gd_upload "${{ secrets.PRIVATE_DRIVE_ID }}"
-                pd_upload "$ROM_OUTPUT"
+                pd_upload
               else
                 sf_upload "$ROM_OUTPUT" "ZK-EU/ZKOS3"
                 gd_upload "1fFNVQDoS4qnOIZP1xyoAiPYGUK2lUUNu"
