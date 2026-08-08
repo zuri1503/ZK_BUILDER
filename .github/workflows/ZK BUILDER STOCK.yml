@@ -52,7 +52,6 @@ jobs:
           DEVICE=""
           ROM_VER=""
           ZK_NAME=""
-          IS_PRIVATE_DEVICE="false"
           if [[ "$ROM_NAME" == *"-OS"* ]]; then
             if [[ "$ROM_NAME" =~ ^([a-z0-9]+)-ota_full-(OS[0-9.]+)\.([A-Z0-9]+)-user-([0-9.]+)-.*\.zip$ ]]; then
               DEVICE="${BASH_REMATCH[1]^^}"
@@ -74,17 +73,12 @@ jobs:
             echo "::error::Unable to parse ROM name: $ROM_NAME"
             exit 1
           fi
-          case "${DEVICE,,}" in
-            nezha|pandora|pudding|popsicle|myron|byron)
-              IS_PRIVATE_DEVICE="true" ;;
-          esac
           {
             echo "ZK_NAME=$ZK_NAME"
             echo "DEVICE=${DEVICE,,}"
             echo "ROM_VER=$ROM_VER"
-            echo "IS_PRIVATE_DEVICE=$IS_PRIVATE_DEVICE"
           } >> $GITHUB_ENV
-          echo "ZK_NAME=$ZK_NAME | DEVICE=${DEVICE,,} | ROM_VER=$ROM_VER | private=$IS_PRIVATE_DEVICE"
+          echo "ZK_NAME=$ZK_NAME | DEVICE=${DEVICE,,} | ROM_VER=$ROM_VER"
       - name: Download ROM files
         run: |
           DEST_DIR="$GITHUB_WORKSPACE/ROM"
@@ -150,18 +144,13 @@ jobs:
             SF_PATH="ZK-CN"
             GD_FOLDER="1PosY7KpdfuAquJjGDMpYSgYUNNKNLTyf"
           fi
-          if [ "$IS_PRIVATE_DEVICE" = "true" ]; then
-            gd_upload "${{ secrets.PRIVATE_DRIVE_ID }}"
-            pd_upload
-          else
-            sf_upload "$ROM_OUTPUT" "$SF_PATH"
-            gd_upload "$GD_FOLDER"
-            echo "ZK_LINK=https://index.projectzk.online/${SF_PATH}" >> $GITHUB_ENV
-          fi
+          sf_upload "$ROM_OUTPUT" "$SF_PATH"
+          gd_upload "$GD_FOLDER"
+          echo "ZK_LINK=https://index.projectzk.online/${SF_PATH}" >> $GITHUB_ENV
           [ "${{ github.event.inputs.SFU }}" = "false" ] && pd_upload
           rm -f key token.pickle upload.py
       - name: Telegram Notification
-        if: env.IS_PRIVATE_DEVICE != 'true' && env.ZK_LINK != ''
+        if: env.ZK_LINK != ''
         run: |
           PAYLOAD=$(jq -n \
             --arg chat "-1002030539146" \
