@@ -626,6 +626,17 @@
     "rom": "256GB / 512GB / 1TB",
     "soc": "Snapdragon 8Gen3"
   },
+  "iolite": {
+    "battery": "8340mAh - 67W",
+    "color": "Black, Purple, Blue, White",
+    "device_name": "REDMI Note 17 Pro 5G / POCO X8",
+    "display": "OLED, 6.83in, 120Hz, 1280x2772",
+    "front": "16MP",
+    "ram": "8GB / 12GB",
+    "rear": "50MP + 8MP",
+    "rom": "128GB / 256GB / 512GB",
+    "soc": "Snapdragon 6sGen4"
+  },
   "ingres": {
     "battery": "4700mAh - 120W",
     "color": "Black, Gray, Blue, AMG",
@@ -845,6 +856,17 @@
     "rear": "50MP + 50MP + 32MP",
     "rom": "256GB / 512GB / 1TB",
     "soc": "Snapdragon 8Elite"
+  },
+  "mist": {
+    "battery": "8000mAh - 45W",
+    "color": "Black, Purple, Blue",
+    "device_name": "REDMI Note 17 5G / POCO M8 Power",
+    "display": "OLED, 7.0in, 120Hz, 1080x2396",
+    "front": "8MP",
+    "ram": "6GB / 8GB",
+    "rear": "50MP",
+    "rom": "128GB / 256GB",
+    "soc": "Snapdragon 4Gen4"
   },
   "mona": {
     "battery": "4500mAh - 55W",

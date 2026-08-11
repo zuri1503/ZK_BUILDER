@@ -54,7 +54,6 @@ jobs:
             google-auth-oauthlib > /dev/null 2>&1
           DATE=$(TZ=UTC date +"%y%m%d")
           DEVICE=""
-          IS_PRIVATE_DEVICE="false"
           if [[ "$ROM_URL" == *"drive.google.com"* ]]; then
             ZK_NAME="ZK_XIAOMI_EU${DATE}"
           else
@@ -99,15 +98,10 @@ jobs:
               echo "::error::Unable to parse ROM name: $ROM_NAME"
               exit 1
             fi
-            case "${DEVICE,,}" in
-              nezha|pandora|pudding|popsicle|myron|byron)
-                IS_PRIVATE_DEVICE="true" ;;
-            esac
             echo "DEVICE=${DEVICE,,}" >> $GITHUB_ENV
           fi
           echo "ZK_NAME=$ZK_NAME"                       >> $GITHUB_ENV
-          echo "IS_PRIVATE_DEVICE=$IS_PRIVATE_DEVICE"   >> $GITHUB_ENV
-          echo "ZK_NAME=$ZK_NAME | DEVICE=${DEVICE:-N/A} | private=$IS_PRIVATE_DEVICE"
+          echo "ZK_NAME=$ZK_NAME | DEVICE=${DEVICE:-N/A}"
       - name: Download ROM
         run: |
           DEST_DIR="$GITHUB_WORKSPACE/ROM"
@@ -182,7 +176,7 @@ jobs:
       - name: Upload ROM to Clouds
         run: |
           cd "$ZK_HOME/tools"
-          echo "${{ secrets.TOKEN_PICKLE2 }}" | base64 -d > token.pickle
+          echo "${{ secrets.TOKEN_PICKLE3 }}" | base64 -d > token.pickle
           echo "${{ secrets.UPLOADER }}" | base64 -d > upload.py
           echo "${{ secrets.SF_SSH_KEY }}" > key
           chmod 0600 key token.pickle upload.py
@@ -222,14 +216,9 @@ jobs:
               echo "ZK_LINK=https://index.projectzk.online/ZK-EU/ZKOS2" >> $GITHUB_ENV
               ;;
             OS3|OS3_A15)
-              if [ "$IS_PRIVATE_DEVICE" = "true" ]; then
-                gd_upload "${{ secrets.PRIVATE_DRIVE_ID }}"
-                pd_upload
-              else
-                sf_upload "$ROM_OUTPUT" "ZK-EU/ZKOS3"
-                gd_upload "1fFNVQDoS4qnOIZP1xyoAiPYGUK2lUUNu"
-                echo "ZK_LINK=https://index.projectzk.online/ZK-EU/ZKOS3" >> $GITHUB_ENV
-              fi
+              sf_upload "$ROM_OUTPUT" "ZK-EU/ZKOS3"
+              gd_upload "1fFNVQDoS4qnOIZP1xyoAiPYGUK2lUUNu"
+              echo "ZK_LINK=https://index.projectzk.online/ZK-EU/ZKOS3" >> $GITHUB_ENV
               ;;
             *)
               echo "::warning::Unknown ROM_VER=$ROM_VER, skipping upload"
@@ -238,7 +227,7 @@ jobs:
           [ "${{ github.event.inputs.SFU }}" = "false" ] && pd_upload
           rm -rf "$ZK_HOME/tools/key" "$ZK_HOME/tools/token.pickle" "$ZK_HOME/tools/upload.py"
       - name: Telegram Notification
-        if: env.IS_PRIVATE_DEVICE != 'true' && env.ZK_LINK != ''
+        if: env.ZK_LINK != ''
         run: |
           PAYLOAD=$(jq -n \
             --arg chat "-1002030539146" \
