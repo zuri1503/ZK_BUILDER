@@ -50,8 +50,6 @@ jobs:
             google-auth-oauthlib > /dev/null 2>&1
           DATE=$(TZ=UTC date +"%y%m%d")
           DEVICE=""
-          WORKERS=$(nproc)
-          echo "WORKERS=$WORKERS" >> $GITHUB_ENV
           if [[ "$ROM_URL" == *"drive.google.com"* ]]; then
             ZK_NAME="ZK_XIAOMI_EU${DATE}"
           else
@@ -81,10 +79,10 @@ jobs:
           fi
           echo "DEVICE=${DEVICE,,}" >> $GITHUB_ENV
           echo "ZK_NAME=$ZK_NAME" >> $GITHUB_ENV
-          echo "ZK_NAME=$ZK_NAME | DEVICE=${DEVICE:-N/A} | WORKERS=$WORKERS"
+          echo "ZK_NAME=$ZK_NAME | DEVICE=${DEVICE:-N/A}"
       - name: Download ROM
         run: |
-          DEST_DIR="/tmp/ROM"
+          DEST_DIR="$GITHUB_WORKSPACE/ROM"
           DEST_FILE="$DEST_DIR/${ZK_NAME}.zip"
           mkdir -p "$DEST_DIR"
           download_gdrive() {
@@ -93,20 +91,17 @@ jobs:
             echo "::endgroup::"
           }
           download_sourceforge() {
-            # Pure bash parse SourceForge URL: https://sourceforge.net/projects/<project>/files/<path>/download
-            # Output: <project>/<path>
-            local url="$ROM_URL"
-            url="${url#https://}"
-            url="${url#http://}"
-            url="${url#www.}"
-            url="${url#sourceforge.net/}"
-            url="${url%download}"
-            url="${url%/}"
-            local rest="${url#projects/}"
-            local proj="${rest%%/*}"
-            local fpath="${rest#*/}"
-            sf_path="${proj}/${fpath}"
-            [ -z "$fpath" ] || [ "$fpath" = "$rest" ] && { echo "::error::Failed to parse SourceForge URL"; return 1; }
+            local sf_path
+            sf_path=$(python3 - <<'EOF'
+          from urllib.parse import urlparse
+          import os, sys
+          p = urlparse(os.environ["ROM_URL"])
+          parts = p.path.split("/")
+          proj = parts[2]
+          fpath = "/".join(parts[4:]).removesuffix("/download")
+          print(f"{proj}/{fpath}")
+          EOF
+          ) || { echo "::error::Failed to parse SourceForge URL"; return 1; }
             local -a mirrors=(
               "https://cfhcable.dl.sourceforge.net/project"
               "https://pilotfiber.dl.sourceforge.net/project"
@@ -143,25 +138,18 @@ jobs:
           echo "Download complete: $DEST_FILE ($(du -h "$DEST_FILE" | cut -f1))"
       - name: Clone ZK AUTO BUILD sources
         run: |
-          ZK_HOME="$GITHUB_WORKSPACE/zk_source"
+          ZK_HOME="/home/runner/work/ZK_AUTO_BUILD/ZK_AUTO_BUILD"
           echo "ZK_HOME=$ZK_HOME" >> $GITHUB_ENV
           install -d -m 700 ~/.ssh
           echo "${{ secrets.PRIVATE_REPO_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
           git clone -b test --depth=1 git@github.com:zuri1503/ZK_AUTO_BUILD.git "$ZK_HOME"
-          mkdir -p "$ZK_HOME/ROM"
-          cp -f /tmp/ROM/*.zip "$ZK_HOME/ROM/"
+          mv -f "$GITHUB_WORKSPACE/ROM" "$ZK_HOME/ROM"
           sudo chmod -R +x "$ZK_HOME"
       - name: Build ProjectZK ROM
-        working-directory: ${{ env.ZK_HOME }}
         run: |
-          echo "::group::Build start"
-          echo "ZK_HOME: $ZK_HOME"
-          echo "ZK_NAME: $ZK_NAME"
-          echo "Workers: $WORKERS"
-          echo "::endgroup::"
-          sudo python3 "$ZK_HOME/build.py" "$GITHUB_ENV" "$ZK_NAME" --workers "$WORKERS"
+          sudo python3 "$ZK_HOME/build.py" "$GITHUB_ENV" "$ZK_NAME"
       - name: Upload ROM to Clouds
         run: |
           cd "$ZK_HOME/tools"
