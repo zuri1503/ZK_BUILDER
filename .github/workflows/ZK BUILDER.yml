@@ -9,10 +9,6 @@ on:
         description: "SF UPLOADER"
         type: boolean
         default: 'true'
-      EXT4:
-        description: "FORCE EXT4"
-        type: boolean
-        default: 'false'
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -153,8 +149,7 @@ jobs:
           sudo chmod -R +x "$ZK_HOME"
       - name: Build ProjectZK ROM
         run: |
-          sudo bash "$ZK_HOME/build.sh" "$GITHUB_ENV" \
-            "$ZK_NAME" "${{ github.event.inputs.EXT4 }}"
+          sudo python3 "$ZK_HOME/build.py" "$GITHUB_ENV" "$ZK_NAME"
       - name: Upload ROM to Clouds
         run: |
           cd "$ZK_HOME/tools"
