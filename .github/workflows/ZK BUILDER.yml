@@ -138,7 +138,7 @@ jobs:
           echo "Download complete: $DEST_FILE ($(du -h "$DEST_FILE" | cut -f1))"
       - name: Clone ZK AUTO BUILD sources
         run: |
-          ZK_HOME="/home/runner/work/ZK_AUTO_BUILD/ZK_AUTO_BUILD"
+          ZK_HOME="/home/runner/work/ZK_AUTO_BUILD"
           echo "ZK_HOME=$ZK_HOME" >> $GITHUB_ENV
           install -d -m 700 ~/.ssh
           echo "${{ secrets.PRIVATE_REPO_KEY }}" > ~/.ssh/id_ed25519
