@@ -9,6 +9,10 @@ on:
         description: "SF UPLOADER"
         type: boolean
         default: 'true'
+      EXT4:
+        description: "FORCE EXT4"
+        type: boolean
+        default: 'false'
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -54,7 +58,25 @@ jobs:
             ZK_NAME="ZK_XIAOMI_EU${DATE}"
           else
             ROM_NAME="$(basename "${ROM_URL%/download}")"
-            if [[ "$ROM_NAME" == *_OS* ]]; then
+            if [[ "$ROM_NAME" == *_OS1* ]]; then
+              if [[ "$ROM_NAME" =~ ^xiaomi\.eu_([^_]+)_(OS[0-9.]+)\.([A-Z0-9]+)_([0-9]+)\.zip$ ]]; then
+                DEVICE="${BASH_REMATCH[1]^^}"
+                OS_VER="${BASH_REMATCH[2]}"
+                REGION="${BASH_REMATCH[3]}"
+                ZK_NAME="ZKOS_${DEVICE}_${OS_VER}.${REGION}_LITE${DATE}"
+              else
+                ZK_NAME="ZKOS_XIAOMI_LITE${DATE}"
+              fi
+            elif [[ "$ROM_NAME" == *_OS2* ]]; then
+              if [[ "$ROM_NAME" =~ ^xiaomi\.eu_([^_]+)_(OS[0-9.]+)\.([A-Z0-9]+)_([0-9]+)\.zip$ ]]; then
+                DEVICE="${BASH_REMATCH[1]^^}"
+                OS_VER="${BASH_REMATCH[2]}"
+                REGION="${BASH_REMATCH[3]}"
+                ZK_NAME="ZKOS_${DEVICE}_${OS_VER}.${REGION}_LITE${DATE}"
+              else
+                ZK_NAME="ZKOS_XIAOMI_LITE${DATE}"
+              fi
+            elif [[ "$ROM_NAME" == *_OS3* ]]; then
               if [[ "$ROM_NAME" =~ ^xiaomi\.eu_([^_]+)_(OS[0-9.]+)\.([A-Z0-9]+)_([0-9]+)\.zip$ ]]; then
                 DEVICE="${BASH_REMATCH[1]^^}"
                 OS_VER="${BASH_REMATCH[2]}"
@@ -76,9 +98,9 @@ jobs:
               echo "::error::Unable to parse ROM name: $ROM_NAME"
               exit 1
             fi
+            echo "DEVICE=${DEVICE,,}" >> $GITHUB_ENV
           fi
-          echo "DEVICE=${DEVICE,,}" >> $GITHUB_ENV
-          echo "ZK_NAME=$ZK_NAME" >> $GITHUB_ENV
+          echo "ZK_NAME=$ZK_NAME"                       >> $GITHUB_ENV
           echo "ZK_NAME=$ZK_NAME | DEVICE=${DEVICE:-N/A}"
       - name: Download ROM
         run: |
@@ -97,11 +119,11 @@ jobs:
           import os, sys
           p = urlparse(os.environ["ROM_URL"])
           parts = p.path.split("/")
-          proj = parts[2]
+          proj  = parts[2]
           fpath = "/".join(parts[4:]).removesuffix("/download")
           print(f"{proj}/{fpath}")
           EOF
-          ) || { echo "::error::Failed to parse SourceForge URL"; return 1; }
+            ) || { echo "::error::Failed to parse SourceForge URL"; return 1; }
             local -a mirrors=(
               "https://cfhcable.dl.sourceforge.net/project"
               "https://pilotfiber.dl.sourceforge.net/project"
@@ -130,7 +152,7 @@ jobs:
             return 1
           }
           case "$ROM_URL" in
-            *"drive.google.com"*) download_gdrive ;;
+            *"drive.google.com"*)       download_gdrive ;;
             *"sourceforge.net/projects/"*) download_sourceforge ;;
             *) echo "::error::Unsupported URL: $ROM_URL"; exit 1 ;;
           esac
@@ -144,13 +166,13 @@ jobs:
           echo "${{ secrets.PRIVATE_REPO_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-          git clone -b test --depth=1 git@github.com:zuri1503/ZK_AUTO_BUILD.git "$ZK_HOME"
-          mv -f "$GITHUB_WORKSPACE/ROM" "$ZK_HOME/"
+          git clone -b main --depth=1 git@github.com:zuri1503/ZK_AUTO_BUILD.git "$ZK_HOME"
+          mv -f "$GITHUB_WORKSPACE/ROM" "$ZK_HOME/ROM"
           sudo chmod -R +x "$ZK_HOME"
       - name: Build ProjectZK ROM
         run: |
-          cd "$ZK_HOME"
-          sudo python3 "$ZK_HOME/build.py" "$GITHUB_ENV" "$ZK_NAME"
+          sudo bash "$ZK_HOME/build.sh" "$GITHUB_ENV" \
+            "$ZK_NAME" "${{ github.event.inputs.EXT4 }}"
       - name: Upload ROM to Clouds
         run: |
           cd "$ZK_HOME/tools"
@@ -171,7 +193,7 @@ jobs:
           gd_upload() {
             local folder_id="$1"
             [ "${{ github.event.inputs.SFU }}" = "true" ] || return 0
-            python upload.py --folder-id "$folder_id" "$ROM_OUTPUT" > /dev/null 2>&1 \
+           python upload.py --folder-id "$folder_id" "$ROM_OUTPUT" > /dev/null 2>&1 \
               || { echo "::error::GDrive upload failed (folder: $folder_id)"; exit 1; }
           }
           pd_upload() {
@@ -181,22 +203,22 @@ jobs:
             V14)
               sf_upload "$ROM_OUTPUT" "ZK-EU/ZKUI14"
               gd_upload "1a2O_DmmxH6o4szRJaBQjSfYXjYvdlRUO"
-              echo "ZK_LINK=https://sourceforge.net/projects/projectzk/files/ProjectZK/ZK-EU/ZKUI14" >> $GITHUB_ENV
+              echo "ZK_LINK=https://index.projectzk.online/ZK-EU/ZKUI14" >> $GITHUB_ENV
               ;;
             OS1|OS1_A13)
               sf_upload "$ROM_OUTPUT" "ZK-EU/ZKOS1"
               gd_upload "1Ke3q3WE5kjLmST63xaea6pos9L_IjBXq"
-              echo "ZK_LINK=https://sourceforge.net/projects/projectzk/files/ProjectZK/ZK-EU/ZKOS1" >> $GITHUB_ENV
+              echo "ZK_LINK=https://index.projectzk.online/ZK-EU/ZKOS1" >> $GITHUB_ENV
               ;;
             OS2|OS2_A14)
               sf_upload "$ROM_OUTPUT" "ZK-EU/ZKOS2"
               gd_upload "1xQJPeS5yI0Tva5AMOJoz05voJQCmzsBR"
-              echo "ZK_LINK=https://sourceforge.net/projects/projectzk/files/ProjectZK/ZK-EU/ZKOS2" >> $GITHUB_ENV
+              echo "ZK_LINK=https://index.projectzk.online/ZK-EU/ZKOS2" >> $GITHUB_ENV
               ;;
             OS3|OS3_A15)
               sf_upload "$ROM_OUTPUT" "ZK-EU/ZKOS3"
               gd_upload "1fFNVQDoS4qnOIZP1xyoAiPYGUK2lUUNu"
-              echo "ZK_LINK=https://sourceforge.net/projects/projectzk/files/ProjectZK/ZK-EU/ZKOS3" >> $GITHUB_ENV
+              echo "ZK_LINK=https://index.projectzk.online/ZK-EU/ZKOS3" >> $GITHUB_ENV
               ;;
             *)
               echo "::warning::Unknown ROM_VER=$ROM_VER, skipping upload"
@@ -209,7 +231,7 @@ jobs:
         run: |
           PAYLOAD=$(jq -n \
             --arg chat "-1002030539146" \
-            --arg text "✅ NEW BUILD: ${ZK_NAME}.zip " \
+            --arg text "✅ <b>NEW BUILD: <a href='${ZK_LINK}/${ZK_NAME}.zip'>${ZK_NAME}.zip</a></b>" \
             '{ chat_id: $chat, text: $text, parse_mode: "HTML" }')
           curl -s -X POST \
             "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
