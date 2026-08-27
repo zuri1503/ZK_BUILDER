@@ -145,7 +145,7 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
           git clone -b test --depth=1 git@github.com:zuri1503/ZK_AUTO_BUILD.git "$ZK_HOME"
-          mv -f "$GITHUB_WORKSPACE/ROM" "/home/runner/work/ZK_AUTO_BUILD/"
+          mv -f "$GITHUB_WORKSPACE/ROM" "$ZK_HOME/"
           sudo chmod -R +x "$ZK_HOME"
       - name: Build ProjectZK ROM
         run: |
